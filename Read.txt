@@ -1,0 +1,3 @@
+ối liên hệ giữa chúng được thể hiện qua một vòng lặp công việc liên tục: một thông tin từ Sếp được truyền đạt qua Email, thiết lập một Deadline rõ ràng. Quá trình thực hiện được giám sát và điều chỉnh thông qua các buổi Họp, và kết quả cuối cùng được công nhận qua một bài Thuyết trình. Sự yếu kém ở bất kỳ khâu nào cũng sẽ tạo ra hiệu ứng domino tiêu cực. Ví dụ, một kỹ năng viết Email kém có thể dẫn đến việc giao việc từ Sếp không rõ ràng, gây hiểu lầm và cuối cùng dẫn đến trễ Deadline, ảnh hưởng đến uy tín của cả cá nhân và tập thể.
+
+Đó là lý do em chọn những vựng để mô tả trong trò chơi này

@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard MC: Đoán Ý Đồng Đội 🎨</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Chosen Palette: Pastel Party -->
+    <!-- Application Structure Plan: Giữ nguyên cấu trúc SPA 4 tab (Giới Thiệu, Luật, Bảng Điểm, Chơi) vì nó trực quan và hiệu quả cho MC. Các tương tác chính vẫn là điều hướng tab, quản lý điểm, bốc từ khóa và bấm giờ. Đã thêm animation để tăng cường trải nghiệm người dùng. -->
+    <!-- Visualization & Content Choices: 1. Luật chơi -> Mục tiêu: Rõ ràng -> Trình bày: Thẻ bo tròn, dễ đọc. 2. Bảng điểm -> Mục tiêu: So sánh 4 đội -> Trình bày: Lưới 2x2 và biểu đồ cột ngang (Chart.js), thêm animation "pop" khi điểm cập nhật. 3. Công cụ chơi -> Mục tiêu: Hỗ trợ MC -> Trình bày: Từ khóa (văn bản + hình ảnh), Đồng hồ (thêm animation "pulse" khi còn ít thời gian), Nút cộng điểm. -> Lý do: Các lựa chọn này tối ưu hóa sự mượt mà và thân thiện của giao diện. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #FEF3F2; /* Màu nền hồng đào rất nhạt */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 250px;
+            max-height: 300px;
+        }
+        .tab-button.active {
+            background-color: #EC4899; /* Màu hồng đậm */
+            color: white;
+            transform: scale(1.05);
+        }
+        
+        /* === Khối Animation được thêm vào === */
+
+        /* 1. Animation cho nội dung Tab khi chuyển */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        /* 2. Animation "Pop" khi cập nhật điểm */
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.25); }
+            100% { transform: scale(1); }
+        }
+        .score-pop {
+            animation: pop 0.3s ease-out;
+        }
+
+        /* 3. Animation "Pulse" cho đồng hồ khi sắp hết giờ */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .timer-low {
+            animation: pulse 1s infinite;
+        }
+
+        /* 4. Animation cho khung từ khóa khi xuất hiện */
+        #keyword-display {
+            transition: all 0.3s ease-out;
+            transform-origin: top;
+        }
+        #keyword-display.hidden {
+            transform: scale(0.95);
+            opacity: 0;
+            height: 0;
+            padding: 0;
+            margin-top: 0;
+        }
+        #keyword-display:not(.hidden) {
+            transform: scale(1);
+            opacity: 1;
+            height: auto;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-6xl">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-extrabold text-pink-600">
+                🎨 Đoán Ý Đồng Đội 🥳
+            </h1>
+            <p class="text-xl text-gray-600">Bảng điều khiển siêu cấp đáng yêu cho MC</p>
+        </header>
+
+        <nav class="flex flex-wrap justify-center gap-2 mb-6">
+            <button data-tab="intro" class="tab-button active text-sm md:text-base font-bold py-3 px-6 rounded-full shadow-md bg-white text-pink-500 hover:shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out">
+                Giới Thiệu
+            </button>
+            <button data-tab="rules" class="tab-button text-sm md:text-base font-bold py-3 px-6 rounded-full shadow-md bg-white text-pink-500 hover:shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out">
+                Luật Chơi
+            </button>
+            <button data-tab="scoreboard" class="tab-button text-sm md:text-base font-bold py-3 px-6 rounded-full shadow-md bg-white text-pink-500 hover:shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out">
+                Bảng Điểm
+            </button>
+            <button data-tab="play" class="tab-button text-sm md:text-base font-bold py-3 px-6 rounded-full shadow-md bg-white text-pink-500 hover:shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out">
+                🚀 Chơi Game
+            </button>
+        </nav>
+
+        <main id="content-container" class="bg-white p-5 md:p-8 rounded-3xl shadow-xl min-h-[400px]">
+            
+            <!-- Tab: Giới Thiệu -->
+            <section id="intro" class="tab-content">
+                <h2 class="text-3xl font-bold text-pink-600 mb-4">Chào mừng Tấn Nhã!</h2>
+                <p class="text-lg text-gray-700 mb-4">
+                    Bạn đang ở trong bảng điều khiển tương tác để quản lý trò chơi "Đoán Ý Đồng Đội". Kịch bản gốc đã được chuyển thể thành công cụ này để giúp bạn điều hành trò chơi một cách mượt mà và vui vẻ nhất!
+                </p>
+                <p class="text-lg text-gray-700 mb-6">
+                    Sử dụng các tab phía trên để xem luật chơi, theo dõi điểm số, và quan trọng nhất là để quản lý vòng chơi (bấm giờ và lấy từ khóa). Chúc bạn có một buổi sinh hoạt công ty thật bùng nổ!
+                </p>
+                <div class="bg-pink-50 border-2 border-pink-200 p-5 rounded-2xl">
+                    <h3 class="font-bold text-xl text-pink-800 mb-3">Checklist Vật Dụng</h3>
+                    <ul class="list-disc list-inside text-gray-700 space-y-2 text-base">
+                        <li>Bảng Trình Chiếu (Máy Chiếu)</li>
+                        <li>Bút Chì Hoặc Bút Bi</li>
+                        <li>Giấy A4</li>
+                        <li>Phần thưởng siêu to khổng lồ cho đội thắng cuộc</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Tab: Luật Chơi -->
+            <section id="rules" class="tab-content hidden">
+                <h2 class="text-3xl font-bold text-pink-600 mb-6">Phổ Biến Luật Chơi</h2>
+                <div class="space-y-4">
+                    <div class="bg-sky-50 border-l-4 border-sky-400 p-5 rounded-lg shadow-sm">
+                        <h3 class="font-bold text-2xl text-sky-800 mb-2">👨‍🎨 Nhiệm Vụ "Họa Sĩ"</h3>
+                        <ul class="list-disc list-inside space-y-1 text-gray-700 text-base">
+                            <li>Bốc thăm 1 từ khóa bí mật (từ MC).</li>
+                            <li>Có <strong>60 GIÂY</strong> để VẼ mô tả từ khóa đó.</li>
+                            <li>Chỉ được phép vẽ, không được giao tiếp bằng cách khác.</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-red-50 border-l-4 border-red-400 p-5 rounded-lg shadow-sm">
+                        <h3 class="font-bold text-2xl text-red-800 mb-2">❌ TUYỆT ĐỐI CẤM "Họa Sĩ"</h3>
+                        <ul class="list-disc list-inside space-y-1 text-gray-700 text-base">
+                            <li>CẤM nói, thì thầm, hoặc phát ra âm thanh.</li>
+                            <li>CẤM viết CHỮ CÁI hoặc CON SỐ.</li>
+                            <li>CẤM dùng hành động cơ thể hoặc ngôn ngữ ký hiệu (đây là thi vẽ, không phải kịch câm).</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-green-50 border-l-4 border-green-400 p-5 rounded-lg shadow-sm">
+                        <h3 class="font-bold text-2xl text-green-800 mb-2">🗣️ Nhiệm Vụ Đồng Đội</h3>
+                        <ul class="list-disc list-inside space-y-1 text-gray-700 text-base">
+                            <li>Quan sát "họa sĩ" vẽ.</li>
+                            <li>Liên tục la hét, phỏng đoán, liên tưởng...</li>
+                            <li>Đoán đúng từ khóa bí mật trong 60 giây.</li>
+                        </ul>
+                    </div>
+
+                    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-5 rounded-lg shadow-sm">
+                        <h3 class="font-bold text-2xl text-yellow-800 mb-2">🏆 Cách Tính Điểm</h3>
+                        <ul class="list-disc list-inside space-y-1 text-gray-700 text-base">
+                            <li>Đoán đúng trong 60 giây: <strong>+10 ĐIỂM</strong> cho đội chơi.</li>
+                            <li>Hết 60 giây: Đội đối thủ có 10 giây để hội ý và đưa ra 1 đáp án duy nhất.</li>
+                            <li>Đội đối thủ "Cướp Điểm" thành công: <strong>+5 ĐIỂM</strong> cho đội đối thủ.</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab: Bảng Điểm -->
+            <section id="scoreboard" class="tab-content hidden">
+                <h2 class="text-3xl font-bold text-pink-600 mb-6">Theo Dõi Điểm Số</h2>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="text-center p-4 rounded-2xl bg-blue-50 border-2 border-blue-200 shadow-md">
+                        <h3 class="text-2xl font-bold text-blue-700">ĐỘI XANH</h3>
+                        <p id="score-blue-text" class="text-5xl font-extrabold text-blue-600">0</p>
+                    </div>
+                    <div class="text-center p-4 rounded-2xl bg-red-50 border-2 border-red-200 shadow-md">
+                        <h3 class="text-2xl font-bold text-red-700">ĐỘI ĐỎ</h3>
+                        <p id="score-red-text" class="text-5xl font-extrabold text-red-600">0</p>
+                    </div>
+                    <div class="text-center p-4 rounded-2xl bg-yellow-50 border-2 border-yellow-300 shadow-md">
+                        <h3 class="text-2xl font-bold text-yellow-700">ĐỘI VÀNG</h3>
+                        <p id="score-yellow-text" class="text-5xl font-extrabold text-yellow-600">0</p>
+                    </div>
+                    <div class="text-center p-4 rounded-2xl bg-green-50 border-2 border-green-300 shadow-md">
+                        <h3 class="text-2xl font-bold text-green-700">ĐỘI LỤC</h3>
+                        <p id="score-green-text" class="text-5xl font-extrabold text-green-600">0</p>
+                    </div>
+                </div>
+
+                <div class="chart-container mb-6">
+                    <canvas id="scoreChart"></canvas>
+                </div>
+
+                <div class="text-center mt-6 pt-4 border-t">
+                    <h3 class="text-lg font-semibold text-gray-700 mb-3">Chỉnh sửa điểm</h3>
+                    <button id="reset-scores" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-full shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out">
+                        Reset Tất Cả Điểm Về 0
+                    </button>
+                </div>
+            </section>
+
+            <!-- Tab: Chơi Game -->
+            <section id="play" class="tab-content hidden">
+                <h2 class="text-3xl font-bold text-pink-600 mb-6">Vận Hành Trò Chơi</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Cột Từ Khóa -->
+                    <div class="bg-gray-50 p-5 rounded-2xl shadow-inner">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4 text-center">Chiếc Hộp Ma Thuật</h3>
+                        <button id="get-keyword" class="w-full bg-pink-500 hover:bg-pink-600 text-white font-bold py-3 px-4 rounded-full shadow-lg text-lg transition-all duration-200 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-pink-300">
+                            ✨ Bốc Từ Khóa ✨
+                        </button>
+                        <div id="keyword-display" class="keyword-box p-4 rounded-2xl text-center mt-4 hidden bg-pink-50 border-2 border-dashed border-pink-300">
+                            <img id="keyword-image" src="" alt="Minh họa từ khóa" class="w-full h-48 object-contain mb-4 rounded-lg hidden">
+                            <p class="text-sm text-gray-600">Từ khóa bí mật là:</p>
+                            <p id="keyword-text" class="text-3xl font-bold text-pink-700"></p>
+                            <button id="hide-keyword" class="text-sm text-gray-500 hover:text-gray-700 mt-2 transition-all duration-200 ease-in-out">
+                                (Ẩn)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Cột Đồng Hồ -->
+                    <div class="bg-gray-50 p-5 rounded-2xl shadow-inner text-center">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-3">Đồng Hồ Đếm Ngược</h3>
+                        <p id="timer-display" class="text-8xl font-mono font-bold text-cyan-700 my-4 transition-colors duration-300">60</p>
+                        <div class="flex justify-center gap-3">
+                            <button id="timer-start" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out">
+                                Bắt Đầu
+                            </button>
+                            <button id="timer-reset" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-3 px-8 rounded-full shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out">
+                                Đặt Lại
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cộng điểm nhanh -->
+                <div class="mt-8 pt-6 border-t border-gray-200">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4 text-center">Kết Quả Vòng Này</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <!-- Đội Xanh -->
+                        <button data-team="blue" data-points="10" class="quick-score bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-full shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                            XANH (+10)
+                        </button>
+                        <button data-team="blue" data-points="5" class="quick-score bg-blue-400 hover:bg-blue-500 text-white font-semibold py-3 px-4 rounded-full shadow transition-all duration-200 ease-in-out transform hover:scale-105">
+                            XANH Cướp (+5)
+                        </button>
+                        <!-- Đội Đỏ -->
+                        <button data-team="red" data-points="10" class="quick-score bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-full shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                            ĐỎ (+10)
+                        </button>
+                        <button data-team="red" data-points="5" class="quick-score bg-red-400 hover:bg-red-500 text-white font-semibold py-3 px-4 rounded-full shadow transition-all duration-200 ease-in-out transform hover:scale-105">
+                            ĐỎ Cướp (+5)
+                        </button>
+                        <!-- Đội Vàng -->
+                        <button data-team="yellow" data-points="10" class="quick-score bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-4 rounded-full shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                            VÀNG (+10)
+                        </button>
+                        <button data-team="yellow" data-points="5" class="quick-score bg-yellow-400 hover:bg-yellow-500 text-white font-semibold py-3 px-4 rounded-full shadow transition-all duration-200 ease-in-out transform hover:scale-105">
+                            VÀNG Cướp (+5)
+                        </button>
+                        <!-- Đội Lục -->
+                        <button data-team="green" data-points="10" class="quick-score bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-full shadow-md transition-all duration-200 ease-in-out transform hover:scale-105">
+                            LỤC (+10)
+                        </button>
+                        <button data-team="green" data-points="5" class="quick-score bg-green-400 hover:bg-green-500 text-white font-semibold py-3 px-4 rounded-full shadow transition-all duration-200 ease-in-out transform hover:scale-105">
+                            LỤC Cướp (+5)
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tabs = document.querySelectorAll('.tab-button');
+            const contents = document.querySelectorAll('.tab-content');
+            
+            const state = {
+                scores: { blue: 0, red: 0, yellow: 0, green: 0 },
+                timer: 60,
+                timerInterval: null,
+                isTimerRunning: false,
+                keywords: [
+                    { text: 'Thuyết trình', image:"image/1.png"},
+                    { text: 'Họp công ty đầu tuần và cuối tuần', image: 'image/2.png' },
+                    { text: 'Sếp', image: 'image/3.png' },
+                    { text: 'Deadline', image: 'image/4.png' },
+                    { text: 'Email', image: 'image/5.png' }
+                ],
+                currentKeyword: {}
+            };
+
+            const scoreBlueText = document.getElementById('score-blue-text');
+            const scoreRedText = document.getElementById('score-red-text');
+            const scoreYellowText = document.getElementById('score-yellow-text');
+            const scoreGreenText = document.getElementById('score-green-text');
+            const timerDisplay = document.getElementById('timer-display');
+            
+            let scoreChart;
+
+            function initializeChart() {
+                const ctx = document.getElementById('scoreChart').getContext('2d');
+                Chart.defaults.font.size = 14;
+                Chart.defaults.font.family = "'Nunito', sans-serif";
+                
+                scoreChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['ĐIỂM SỐ'],
+                        datasets: [
+                            {
+                                label: 'Đội Xanh',
+                                data: [state.scores.blue],
+                                backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                                borderColor: 'rgba(59, 130, 246, 1)',
+                                borderWidth: 2,
+                                borderRadius: 8
+                            },
+                            {
+                                label: 'Đội Đỏ',
+                                data: [state.scores.red],
+                                backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                                borderColor: 'rgba(239, 68, 68, 1)',
+                                borderWidth: 2,
+                                borderRadius: 8
+                            },
+                            {
+                                label: 'Đội Vàng',
+                                data: [state.scores.yellow],
+                                backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                                borderColor: 'rgba(245, 158, 11, 1)',
+                                borderWidth: 2,
+                                borderRadius: 8
+                            },
+                            {
+                                label: 'Đội Lục',
+                                data: [state.scores.green],
+                                backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                                borderColor: 'rgba(16, 185, 129, 1)',
+                                borderWidth: 2,
+                                borderRadius: 8
+                            }
+                        ]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                grid: { display: false },
+                                ticks: { stepSize: 5, font: { weight: 'bold' } }
+                            },
+                            y: {
+                                grid: { display: false },
+                                display: false
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: { size: 14, weight: '700' },
+                                    boxWidth: 20,
+                                    padding: 20
+                                }
+                            },
+                            tooltip: {
+                                enabled: true,
+                                boxPadding: 4,
+                                titleFont: { weight: 'bold' },
+                                bodyFont: { weight: 'bold' }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function updateScoreboard() {
+                scoreBlueText.textContent = state.scores.blue;
+                scoreRedText.textContent = state.scores.red;
+                scoreYellowText.textContent = state.scores.yellow;
+                scoreGreenText.textContent = state.scores.green;
+
+                const scoreElements = [scoreBlueText, scoreRedText, scoreYellowText, scoreGreenText];
+                scoreElements.forEach(el => el.classList.add('score-pop'));
+                setTimeout(() => {
+                    scoreElements.forEach(el => el.classList.remove('score-pop'));
+                }, 300);
+                
+                if (scoreChart) {
+                    scoreChart.data.datasets[0].data[0] = state.scores.blue;
+                    scoreChart.data.datasets[1].data[0] = state.scores.red;
+                    scoreChart.data.datasets[2].data[0] = state.scores.yellow;
+                    scoreChart.data.datasets[3].data[0] = state.scores.green;
+                    scoreChart.update();
+                }
+            }
+
+            function showTab(tabId) {
+                contents.forEach(content => {
+                    if (content.id === tabId) {
+                        content.classList.remove('hidden');
+                        content.classList.add('fade-in');
+                    } else {
+                        content.classList.add('hidden');
+                        content.classList.remove('fade-in');
+                    }
+                });
+                
+                tabs.forEach(tab => {
+                    if (tab.dataset.tab === tabId) {
+                        tab.classList.add('active');
+                    } else {
+                        tab.classList.remove('active');
+                    }
+                });
+
+                if (tabId === 'scoreboard' && !scoreChart) {
+                    initializeChart();
+                }
+            }
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    showTab(tab.dataset.tab);
+                });
+            });
+
+            document.getElementById('get-keyword').addEventListener('click', () => {
+                const randomIndex = Math.floor(Math.random() * state.keywords.length);
+                state.currentKeyword = state.keywords[randomIndex];
+                
+                const keywordTextElement = document.getElementById('keyword-text');
+                const keywordImageElement = document.getElementById('keyword-image');
+
+                keywordTextElement.textContent = state.currentKeyword.text;
+                
+                if (state.currentKeyword.image) {
+                    keywordImageElement.src = state.currentKeyword.image;
+                    keywordImageElement.classList.remove('hidden');
+                } else {
+                    keywordImageElement.src = '';
+                    keywordImageElement.classList.add('hidden');
+                }
+                
+                document.getElementById('keyword-display').classList.remove('hidden');
+            });
+
+            document.getElementById('hide-keyword').addEventListener('click', () => {
+                document.getElementById('keyword-display').classList.add('hidden');
+                setTimeout(() => {
+                    document.getElementById('keyword-image').src = '';
+                    document.getElementById('keyword-image').classList.add('hidden');
+                }, 300); // Chờ animation ẩn kết thúc
+            });
+
+            function startTimer() {
+                if (state.isTimerRunning) return;
+                
+                state.isTimerRunning = true;
+                const startButton = document.getElementById('timer-start');
+                startButton.textContent = 'Dừng';
+                startButton.classList.replace('bg-green-600', 'bg-yellow-500');
+                startButton.classList.replace('hover:bg-green-700', 'hover:bg-yellow-600');
+
+                state.timerInterval = setInterval(() => {
+                    state.timer--;
+                    timerDisplay.textContent = state.timer;
+
+                    if (state.timer <= 10 && state.timer > 0) {
+                        timerDisplay.classList.add('text-red-600');
+                        timerDisplay.classList.add('timer-low');
+                    }
+
+                    if (state.timer <= 0) {
+                        stopTimer();
+                        timerDisplay.textContent = 'HẾT GIỜ!';
+                        timerDisplay.classList.add('text-red-600');
+                        timerDisplay.classList.remove('timer-low');
+                    }
+                }, 1000);
+            }
+
+            function stopTimer() {
+                clearInterval(state.timerInterval);
+                state.isTimerRunning = false;
+                const startButton = document.getElementById('timer-start');
+                startButton.textContent = 'Bắt Đầu';
+                startButton.classList.replace('bg-yellow-500', 'bg-green-600');
+                startButton.classList.replace('hover:bg-yellow-600', 'hover:bg-green-700');
+            }
+
+            document.getElementById('timer-start').addEventListener('click', () => {
+                if (state.isTimerRunning) {
+                    stopTimer();
+                } else {
+                    if (state.timer > 0) {
+                        startTimer();
+                    }
+                }
+            });
+
+            document.getElementById('timer-reset').addEventListener('click', () => {
+                stopTimer();
+                state.timer = 60;
+                timerDisplay.textContent = state.timer;
+                timerDisplay.classList.remove('text-red-600');
+                timerDisplay.classList.remove('timer-low');
+            });
+
+            document.querySelectorAll('.quick-score').forEach(button => {
+                button.addEventListener('click', () => {
+                    const team = button.dataset.team;
+                    const points = parseInt(button.dataset.points, 10);
+                    
+                    if (team in state.scores) {
+                        state.scores[team] += points;
+                    }
+                    
+                    updateScoreboard();
+                    
+                    if (state.isTimerRunning) {
+                        stopTimer();
+                    }
+                    timerDisplay.textContent = 'ĐÃ GHI ĐIỂM!';
+                    timerDisplay.classList.remove('text-red-600', 'timer-low');
+                });
+            });
+
+            document.getElementById('reset-scores').addEventListener('click', () => {
+                state.scores.blue = 0;
+                state.scores.red = 0;
+                state.scores.yellow = 0;
+                state.scores.green = 0;
+                updateScoreboard();
+            });
+
+            showTab('intro');
+        });
+    </script>
+</body>
+</html>
